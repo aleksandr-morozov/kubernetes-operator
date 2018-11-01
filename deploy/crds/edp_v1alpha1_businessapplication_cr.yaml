@@ -1,0 +1,7 @@
+apiVersion: edp.epam.com/v1alpha1
+kind: BusinessApplication
+metadata:
+  name: example-businessapplication
+spec:
+  # Add fields here
+  size: 3
