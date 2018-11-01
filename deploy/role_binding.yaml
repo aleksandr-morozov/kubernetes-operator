@@ -1,0 +1,11 @@
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: edp-operator
+subjects:
+- kind: ServiceAccount
+  name: edp-operator
+roleRef:
+  kind: Role
+  name: edp-operator
+  apiGroup: rbac.authorization.k8s.io
