@@ -11,12 +11,23 @@ import (
 type BusinessApplicationSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
+	GitRepoUrl      string `json:"git_repo_url"`
+	AddRepoStrategy string `json:"add_repo_strategy"`
+	Language        string `json:"language"`
+	BuildTool       string `json:"build_tool"`
+	Framework       string `json:"framework"`
+	Database        bool   `json:"database"`
+	Route           struct {
+		Site string `json:"site"`
+		Path string `json:"path"`
+	}
 }
 
 // BusinessApplicationStatus defines the observed state of BusinessApplication
 type BusinessApplicationStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
+	action string `json:"action"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
