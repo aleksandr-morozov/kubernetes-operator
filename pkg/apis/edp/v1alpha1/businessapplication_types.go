@@ -27,7 +27,9 @@ type BusinessApplicationSpec struct {
 type BusinessApplicationStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	action string `json:"action"`
+	Action  string `json:"action"`
+	Message string `json:"message"`
+	Status  string `json:"status"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

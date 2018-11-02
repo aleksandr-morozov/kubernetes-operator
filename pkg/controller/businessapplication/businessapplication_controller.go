@@ -2,9 +2,11 @@ package businessapplication
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	edpv1alpha1 "github.com/edp-operator/pkg/apis/edp/v1alpha1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -53,14 +55,15 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 
 	// TODO(user): Modify this to be the types you create that are owned by the primary resource
 	// Watch for changes to secondary resource Pods and requeue the owner BusinessApplication
-	err = c.Watch(&source.Kind{Type: &corev1.Node{}}, &handler.EnqueueRequestForOwner{
+	err = c.Watch(&source.Kind{Type: &batchv1.Job{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &edpv1alpha1.BusinessApplication{},
 	})
+	log.Printf("Found Job %s", err)
 	if err != nil {
 		return err
 	}
-	log.Printf("Found Pod %s", err)
+	log.Printf("Found Job %s", err)
 
 	return nil
 }
@@ -99,24 +102,26 @@ func (r *ReconcileBusinessApplication) Reconcile(request reconcile.Request) (rec
 		return reconcile.Result{}, err
 	}
 
-	// Define a new Pod object
-	pod := newPodForCR(instance)
+	// Define a new Job object
+	job := newJobForCR(instance)
 
 	// Set BusinessApplication instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
+	if err := controllerutil.SetControllerReference(instance, job, r.scheme); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	// Check if this Pod already exists
-	found := &corev1.Pod{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
+	// Check if this Job already exists
+	found := &batchv1.Job{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: job.Name, Namespace: job.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
-		log.Printf("Creating a new Pod %s/%s\n", pod.Namespace, pod.Name)
-		err = r.client.Create(context.TODO(), pod)
+		log.Printf("Creating a new Job %s/%s. Command - %s\n", job.Namespace, job.Name, job.Spec.Template.Spec.Containers[0].Command)
+		err = r.client.Create(context.TODO(), job)
 		if err != nil {
+
 			return reconcile.Result{}, err
 		}
-
+		instance = updateStatus(instance)
+		r.client.Update(context.TODO(), instance)
 		// Pod created successfully - don't requeue
 		return reconcile.Result{}, nil
 	} else if err != nil {
@@ -124,27 +129,41 @@ func (r *ReconcileBusinessApplication) Reconcile(request reconcile.Request) (rec
 	}
 
 	// Pod already exists - don't requeue
-	log.Printf("Skip reconcile: Pod %s/%s already exists", found.Namespace, found.Name)
+	log.Printf("Skip reconcile: Job %s/%s already exists", found.Namespace, found.Name)
 	return reconcile.Result{}, nil
 }
 
+func updateStatus(cr *edpv1alpha1.BusinessApplication) *edpv1alpha1.BusinessApplication {
+	cr.Status = edpv1alpha1.BusinessApplicationStatus{
+		Action:  "Adding application",
+		Message: fmt.Sprintf("Adding business application %s application via Cockpit", cr.Name),
+		Status:  "In progress",
+	}
+	return cr
+}
+
 // newPodForCR returns a busybox pod with the same name/namespace as the cr
-func newPodForCR(cr *edpv1alpha1.BusinessApplication) *corev1.Pod {
+func newJobForCR(cr *edpv1alpha1.BusinessApplication) *batchv1.Job {
 	labels := map[string]string{
 		"app": cr.Name,
 	}
-	return &corev1.Pod{
+	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name + "-pod",
+			Name:      cr.Name + "-job",
 			Namespace: cr.Namespace,
 			Labels:    labels,
 		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:    "busybox",
-					Image:   "busybox",
-					Command: []string{"sleep", "3600"},
+		Spec: batchv1.JobSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					RestartPolicy: "OnFailure",
+					Containers: []corev1.Container{
+						{
+							Name:    "busybox",
+							Image:   "busybox",
+							Command: []string{"sleep", "60"},
+						},
+					},
 				},
 			},
 		},
