@@ -8,6 +8,6 @@ spec:
     kind: BusinessApplication
     listKind: BusinessApplicationList
     plural: businessapplications
-    singular: businessapplication
+    singular: ba
   scope: Namespaced
   version: v1alpha1

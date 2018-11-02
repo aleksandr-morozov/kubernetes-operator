@@ -1,7 +1,14 @@
 apiVersion: edp.epam.com/v1alpha1
 kind: BusinessApplication
 metadata:
-  name: example-businessapplication
+  name: businessapplication2
 spec:
-  # Add fields here
-  size: 3
+  git_repo_url: "git@git.epam.com:epmd-edp/examples/basic/edp-springboot-helloworld.git"
+  add_repo_strategy: "import"
+  language: "Java"
+  build_tool: "Maven"
+  framework: "SpringBoot"
+  need_database: false
+  route:
+    - site: "helloworls"
+      path: "/api"

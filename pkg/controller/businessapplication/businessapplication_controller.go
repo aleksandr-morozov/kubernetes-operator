@@ -49,15 +49,18 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
+	log.Printf("Found BusinessApplication %s", err)
+
 	// TODO(user): Modify this to be the types you create that are owned by the primary resource
 	// Watch for changes to secondary resource Pods and requeue the owner BusinessApplication
-	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
+	err = c.Watch(&source.Kind{Type: &corev1.Node{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &edpv1alpha1.BusinessApplication{},
 	})
 	if err != nil {
 		return err
 	}
+	log.Printf("Found Pod %s", err)
 
 	return nil
 }
