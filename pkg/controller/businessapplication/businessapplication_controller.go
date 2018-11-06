@@ -3,8 +3,6 @@ package businessapplication
 import (
 	"context"
 	"fmt"
-	"log"
-
 	edpv1alpha1 "github.com/edp-operator/pkg/apis/edp/v1alpha1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -12,6 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -51,19 +50,15 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	log.Printf("Found BusinessApplication %s", err)
-
 	// TODO(user): Modify this to be the types you create that are owned by the primary resource
 	// Watch for changes to secondary resource Pods and requeue the owner BusinessApplication
 	err = c.Watch(&source.Kind{Type: &batchv1.Job{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &edpv1alpha1.BusinessApplication{},
 	})
-	log.Printf("Found Job %s", err)
 	if err != nil {
 		return err
 	}
-	log.Printf("Found Job %s", err)
 
 	return nil
 }
@@ -102,6 +97,8 @@ func (r *ReconcileBusinessApplication) Reconcile(request reconcile.Request) (rec
 		return reconcile.Result{}, err
 	}
 
+	updateBusinessApplication(instance, r)
+
 	// Define a new Job object
 	job := newJobForCR(instance)
 
@@ -120,26 +117,55 @@ func (r *ReconcileBusinessApplication) Reconcile(request reconcile.Request) (rec
 
 			return reconcile.Result{}, err
 		}
-		instance = updateStatus(instance)
-		r.client.Update(context.TODO(), instance)
+		updateStatus(instance, found, r)
+
 		// Pod created successfully - don't requeue
 		return reconcile.Result{}, nil
 	} else if err != nil {
 		return reconcile.Result{}, err
 	}
 
-	// Pod already exists - don't requeue
+	// Job already exists - don't requeue
+	updateStatus(instance, found, r)
 	log.Printf("Skip reconcile: Job %s/%s already exists", found.Namespace, found.Name)
 	return reconcile.Result{}, nil
 }
 
-func updateStatus(cr *edpv1alpha1.BusinessApplication) *edpv1alpha1.BusinessApplication {
-	cr.Status = edpv1alpha1.BusinessApplicationStatus{
-		Action:  "Adding application",
-		Message: fmt.Sprintf("Adding business application %s application via Cockpit", cr.Name),
-		Status:  "In progress",
+func updateBusinessApplication(ba *edpv1alpha1.BusinessApplication, r *ReconcileBusinessApplication) {
+	log.Printf("ba.Status.Database.Enabled - %v, ba.Spec.Database - %v", ba.Status.Database.Enabled, ba.Spec.Database)
+	if ba.Status.Database.Enabled != ba.Spec.Database {
+		log.Printf("Configuration of BA %s has been changed, database enabled has been changed", ba.Name)
+		if ba.Spec.Database == true {
+			log.Printf("Database was enabled in BA %s", ba.Name)
+			log.Printf("Performing enabling database business logic via controller")
+			log.Printf("Updating status of BA %s resource to true", ba.Name)
+			ba.Status.Database.Enabled = true
+			r.client.Update(context.TODO(), ba)
+		} else {
+			log.Printf("Database was disabled in BA %s", ba.Name)
+			log.Printf("Performing disabling database business logic via controller")
+			log.Printf("Updating status of BA %s resource to false", ba.Name)
+			ba.Status.Database.Enabled = false
+			r.client.Update(context.TODO(), ba)
+		}
 	}
-	return cr
+}
+
+func updateStatus(cr *edpv1alpha1.BusinessApplication, job *batchv1.Job, r *ReconcileBusinessApplication) {
+	var action, message, status string
+	if job.Status.Succeeded > 0 && cr.Status.Message != "Completed" {
+		action = "Adding application"
+		message = fmt.Sprintf("Business application %s has been successfully added", cr.Name)
+		status = "Completed"
+	} else {
+		action = "Adding application"
+		message = fmt.Sprintf("Adding business application %s via Cockpit", cr.Name)
+		status = "In progress"
+	}
+	cr.Status.Action = action
+	cr.Status.Message = message
+	cr.Status.Status = status
+	r.client.Update(context.TODO(), cr)
 }
 
 // newPodForCR returns a busybox pod with the same name/namespace as the cr
@@ -159,9 +185,10 @@ func newJobForCR(cr *edpv1alpha1.BusinessApplication) *batchv1.Job {
 					RestartPolicy: "OnFailure",
 					Containers: []corev1.Container{
 						{
-							Name:    "busybox",
-							Image:   "busybox",
-							Command: []string{"sleep", "60"},
+							Name:            "busybox",
+							Image:           "busybox",
+							Command:         []string{"sleep", "10"},
+							ImagePullPolicy: "IfNotPresent",
 						},
 					},
 				},
